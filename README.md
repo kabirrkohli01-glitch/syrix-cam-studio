@@ -1,11 +1,29 @@
-# SYRIX Cam
+<p align="center">
+  <img src="docs/logo.png" width="104" alt="SYRIX Cam logo">
+</p>
 
-Real-time webcam effects, health readings, camera games and Syrix, a voice and vision assistant, for Windows.
-Made by Kabirr Kohli · Powered by SYRIX.
+<h1 align="center">SYRIX Cam</h1>
 
-![Cinematic look on the live camera](docs/cinematic.jpg)
+<p align="center">
+  <b>A webcam studio for Windows with real-time effects, health readings, camera games and Syrix — a voice and vision assistant that runs its models on your own GPU.</b>
+</p>
 
-![Syrix building and editing a drawing from chat](docs/build-chat.jpg)
+<p align="center">
+  JavaScript · C# · WebView2 · WebGPU · MediaPipe · ONNX Runtime<br>
+  <a href="https://kabirr-kohli.pages.dev/syrix-cam">Project page</a> ·
+  <a href="https://kabirr-kohli.pages.dev">Portfolio</a>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/cinematic.jpg" width="49%" alt="Cinematic look on the live camera">
+  <img src="docs/build-chat.jpg" width="49%" alt="Syrix building and editing a drawing from chat">
+</p>
+
+## Why it exists
+
+SYRIX Cam started as a question: how much of a voice and vision assistant can run on one home PC, live, without the picture ever stuttering? Face, hand and pose tracking, speech recognition and speech synthesis all run locally on the GPU, and the only thing that ever leaves the machine is a text request to the assistant's gateway. It is in active development.
 
 ## Modes
 
@@ -24,7 +42,7 @@ Made by Kabirr Kohli · Powered by SYRIX.
 
 Widgets (Clock, Timer, Posture Coach, Screen Distance, Blink Coach, Rep Counter, Mood Meter, Sticky Note, Performance) float above any mode. Screen distance combines iris size and pupil distance, each weighted by its precision. Blinks are read from the raw (unsmoothed) eye landmarks and the model's eyelid score against learned open-eye baselines. Posture is compared with the best posture held in the session, or an explicit calibration.
 
-## Layout
+## Interface
 
 - **Sidebar** (left): every mode with its icon, plus search, widgets, reset, mini player, full screen and settings.
 - **Island** (top centre): one capsule that changes shape with what is happening: camera status, what Syrix can see and model loading when idle; level bars, live captions and the spoken reply in voice mode; Syrix's reply when the chat panel is closed; and short confirmations. It has no buttons.
@@ -34,7 +52,7 @@ Widgets (Clock, Timer, Posture Coach, Screen Distance, Blink Coach, Rep Counter,
 
 Ctrl+K (or /) opens a search over every mode, effect, widget, action and setting. Gestures: thumbs up/down change look, peace changes scene, an open-palm swipe changes effect, a fist held for a second freezes the picture.
 
-## Syrix
+## The assistant
 
 Syrix runs on a SYRIX gateway, whose address is set in `app/js/syrix/gateway.js`, `host/SyrixCam.cs` and the Content Security Policy in `app/index.html`. The app holds only a device token, issued by the gateway's pairing endpoint and stored encrypted with Windows DPAPI; it never holds a model provider key.
 
@@ -58,6 +76,27 @@ Nothing loads before it is needed. A tracking model loads when an effect, widget
 - Every shader pass is compiled in the background at start-up, and camera photos for Syrix are JPEG-encoded off the main thread.
 - The host turns off Chromium's window-occlusion check, which paused drawing while the window was visible under on-screen overlays.
 
+## How it is put together
+
+```mermaid
+flowchart LR
+  CAM[Camera] --> PAGE[Page: effects<br/>drawn every frame]
+  CAM -. one frame at a time .-> W[Vision worker<br/>MediaPipe models]
+  W -- landmarks --> PAGE
+  MIC[Microphone] --> VAD[Silero VAD] --> STT[Whisper on WebGPU]
+  STT --> GW[SYRIX gateway<br/>text only]
+  GW --> TTS[Kokoro speech<br/>on WebGPU] --> SPK[Speakers]
+  HOST[C# host<br/>WebView2] -. one allowed origin .-> GW
+```
+
+## Engineering notes
+
+- **The picture never waits for a model.** Every MediaPipe model used to run inside the frame loop, so a slow detection froze the camera. They now run in a module worker that is handed one downscaled frame at a time; a slow model delays the next tracking update, never the picture. If the worker cannot start, tracking moves back into the page automatically.
+- **Silence that looked like speed.** The half-precision Kokoro build benchmarked fast on WebGPU — and every sample it produced was NaN, so voice mode spoke silence. The app now uses the full-precision model, and every speech engine is test-spoken at start-up and checked for real sound before it is trusted.
+- **Transcribing before the turn ends.** Speech is transcribed 240 ms into a pause, so the text is already there when the speaker stops.
+- **Nothing loads before it is needed.** Tracking models load on first use and close after 45 seconds idle; speech models load with voice mode and close when it ends.
+- **Generated apps are boxed in.** Games and 3D scenes the assistant writes run in a sandboxed iframe with an opaque origin and a policy that allows no network, so they cannot reach the page, its storage or the device token.
+
 ## Privacy model
 
 - The host serves the local `app` folder under a private host name and runs WebView2 InPrivate.
@@ -66,7 +105,7 @@ Nothing loads before it is needed. A tracking model loads when an effect, widget
 - Camera and microphone permissions are granted to the bundled page only; every other permission is denied, downloads are cancelled and nothing is recorded.
 - Stored on disk: `%LOCALAPPDATA%\SYRIX Cam\settings.json` (preferences, the facts Syrix was asked to remember, and, when Face ID is set up, the owner's face signatures: numbers, not images) and `syrix.device` (the encrypted device token). Face ID signatures never leave the PC; Syrix only receives the outcome.
 
-## Layout
+## Repository layout
 
 ```
 app/        Web app (HTML, CSS, ES modules, MediaPipe, ONNX Runtime, three.js and voice models)
@@ -98,4 +137,4 @@ Developed in a private repository — 15 commits, October 2026 — and published
 
 ---
 
-© 2026 Kabirr Kohli. All rights reserved. Published for viewing; no licence is granted to copy, modify or redistribute. Third-party components are listed in `THIRD_PARTY_NOTICES.txt` under their own licences.
+<p align="center"><sub>© 2026 Kabirr Kohli. All rights reserved. Published for viewing; no licence is granted to copy, modify or redistribute. Third-party components are listed in `THIRD_PARTY_NOTICES.txt` under their own licences.</sub></p>
