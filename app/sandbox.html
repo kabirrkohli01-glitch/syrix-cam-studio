@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Runner for apps Syrix writes (games, 3D scenes, simulations). It is
+       loaded in an iframe sandboxed without same-origin, so the code inside
+       has an opaque origin: it cannot reach the parent page, its storage or
+       the SYRIX device token. This policy also gives it no network at all;
+       libraries arrive from the parent as text and load from blob URLs. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; worker-src blob:; base-uri 'none'; form-action 'none'">
+  <style>html, body { margin: 0; height: 100%; background: #0b0b0f; color: #f5f5f7; font: 14px "Segoe UI", system-ui, sans-serif; }</style>
+  <script>
+    (() => {
+      // Import specifiers model-written code commonly uses for three.js,
+      // including CDN URLs (which could never load here), mapped to the
+      // bundled copies.
+      const CDN_THREE = /(["'])https?:\/\/[^"']*?three[^"']*?\/build\/three\.module(?:\.min)?\.js\1/g;
+      const CDN_ORBIT = /(["'])https?:\/\/[^"']*?three[^"']*?\/examples\/jsm\/controls\/OrbitControls\.js\1/g;
+
+      function bridge() {
+        // Live input from the camera, posted by the parent about 30 times a
+        // second, plus errors reported back so Syrix can fix its code.
+        const syrix = {
+          hands: [], face: null, photo: null, listeners: [],
+          on(type, fn) { if (type === 'input' && typeof fn === 'function') this.listeners.push(fn); },
+        };
+        window.syrix = syrix;
+        addEventListener('message', (e) => {
+          const m = e.data;
+          if (!m || m.type !== 'input') return;
+          syrix.hands = m.hands || [];
+          syrix.face = m.face || null;
+          for (const fn of syrix.listeners) { try { fn(syrix); } catch (err) { report(err); } }
+        });
+        const report = (err) => parent.postMessage({ type: 'syrix-app', event: 'error', message: String((err && (err.stack || err.message)) || err).slice(0, 600) }, '*');
+        addEventListener('error', (e) => report(e.error || e.message));
+        addEventListener('unhandledrejection', (e) => report(e.reason));
+        setTimeout(() => parent.postMessage({ type: 'syrix-app', event: 'running' }, '*'), 0);
+      }
+
+      function boot(m) {
+        const url = (src) => URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+        const imports = {};
+        if (m.libs && m.libs.three) {
+          imports.three = url(m.libs.three);
+          if (m.libs.orbit) {
+            const orbit = url(m.libs.orbit);
+            imports['three/addons/controls/OrbitControls.js'] = orbit;
+            imports['three/examples/jsm/controls/OrbitControls.js'] = orbit;
+          }
+        }
+        let html = String(m.html || '').replace(CDN_THREE, '$1three$1').replace(CDN_ORBIT, '$1three/addons/controls/OrbitControls.js$1');
+        const photo = m.photo ? `window.syrix.photo = ${JSON.stringify(m.photo)};` : '';
+        const prelude = `<script type="importmap">${JSON.stringify({ imports })}<\/script><script>(${bridge.toString()})();${photo}<\/script>`;
+        const at = html.search(/<head[^>]*>/i);
+        if (at >= 0) {
+          const end = html.indexOf('>', at) + 1;
+          html = html.slice(0, end) + prelude + html.slice(end);
+        } else {
+          html = prelude + html;
+        }
+        document.open();
+        document.write(html);
+        document.close();
+      }
+
+      let booted = false;
+      addEventListener('message', (e) => {
+        const m = e.data;
+        if (!booted && m && m.type === 'load') { booted = true; boot(m); }
+      });
+      parent.postMessage({ type: 'syrix-app', event: 'ready' }, '*');
+    })();
+  </script>
+</head>
+<body></body>
+</html>

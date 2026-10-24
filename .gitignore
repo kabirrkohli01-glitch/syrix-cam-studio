@@ -1,0 +1,12 @@
+# Build output (build\build.ps1 recreates it)
+dist/
+
+# On-device voice model weights: 1.4 GB, single files up to 370 MB. They stay
+# on disk in app/models/voice/*/onnx/ and are not versioned; see README.
+app/models/voice/*/onnx/
+
+# Editor and OS files
+.vscode/
+*.log
+Thumbs.db
+desktop.ini

@@ -1,0 +1,5 @@
+{
+  "feature_extractor_type": "MoonshineFeatureExtractor",
+  "processor_class": "MoonshineProcessor",
+  "sampling_rate": 16000
+}

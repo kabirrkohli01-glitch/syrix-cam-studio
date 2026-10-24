@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Everything the app needs ships in this folder. The only remote address
+       allowed is the SYRIX gateway, used when the user talks to Syrix. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://your-syrix-gateway.example.workers.dev; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SYRIX Cam</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <main id="stage" aria-label="Camera view">
+    <video id="cam" playsinline muted></video>
+    <canvas id="gl"></canvas>
+    <canvas id="fx"></canvas>
+  </main>
+
+  <div id="stage-objects" class="stage-objects" aria-label="Things Syrix made"></div>
+  <div id="apps" class="apps-layer" aria-label="Apps Syrix built"></div>
+  <div id="desktop" class="desktop" hidden></div>
+  <div id="widgets" class="widgets-layer"></div>
+
+  <nav class="rail ui-layer" id="rail" aria-label="Modes and tools">
+    <div class="rail-brand" title="SYRIX Cam · Made by Kabirr Kohli · Powered by SYRIX"><img class="brand-mark" src="assets/logo-512.png" alt="SYRIX Cam"></div>
+    <div class="rail-modes scroll-y" id="rail-modes"></div>
+    <div class="rail-tools">
+      <button class="icon-btn" id="btn-menu" title="Search everything (Ctrl+K)">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-widgets" title="Widgets (W)">
+        <svg viewBox="0 0 24 24" class="ico"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-reset" title="Reset to normal camera">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-pip" title="Mini player">
+        <svg viewBox="0 0 24 24" class="ico"><rect x="2" y="4" width="20" height="16" rx="3"/><rect x="12" y="12" width="7" height="5" rx="1"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-full" title="Full screen (F)">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-settings" title="Settings (S)">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <div class="island ui-layer" id="island" data-pane="idle">
+    <div class="isl-pane isl-idle" data-pane="idle">
+      <button class="status" id="btn-live" title="Camera on (L)"><span class="live-dot"></span><span class="status-text">Live</span></button>
+      <span class="isl-sep"></span>
+      <button class="sense" id="sense" title="What Syrix can see right now"><span class="sense-dot"></span><span class="sense-chips" id="sense-chips">Starting</span></button>
+      <div class="engine" id="engine-status" hidden><span class="spinner"></span><span id="engine-text">Loading AI</span></div>
+    </div>
+    <div class="isl-pane isl-voice" data-pane="voice">
+      <div class="pet" id="pet"></div>
+      <span class="vi-bars" id="vi-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      <div class="vi-text"><div class="vi-state" id="vi-state">Listening</div><div class="vi-caption" id="vi-caption"></div></div>
+    </div>
+    <div class="isl-pane isl-answer" data-pane="answer" title="Open the chat">
+      <span class="isl-logo"><img src="assets/syrix-logo-128.png" alt=""></span>
+      <div class="isl-answer-body"><div class="isl-answer-state" id="isl-answer-state">Syrix</div><div class="isl-answer-text" id="isl-answer"></div></div>
+    </div>
+    <div class="isl-pane isl-toast" data-pane="toast"><span id="toast" role="status" aria-live="polite"></span></div>
+  </div>
+
+  <div class="top-actions ui-layer">
+    <button class="mic-btn" id="btn-voice" title="Talk to Syrix hands-free (V)" aria-pressed="false">
+      <svg viewBox="0 0 24 24" class="ico"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <button class="syrix-btn" id="btn-syrix" title="Ask Syrix (T)" aria-label="Open Syrix">
+      <span class="syrix-btn-inner">
+        <span class="syrix-glyph"><img src="assets/syrix-logo-128.png" alt=""></span>
+        <span class="syrix-btn-text">SYRIX</span>
+      </span>
+    </button>
+  </div>
+
+  <div class="widget-picker" id="widget-picker" hidden></div>
+
+  <div class="faceid-scan" id="faceid-scan" hidden role="status" aria-live="polite">
+    <svg class="fs-ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="fs-track" cx="60" cy="60" r="54"/><circle class="fs-prog" cx="60" cy="60" r="54"/></svg>
+    <div class="fs-text"><b id="fs-step">Look straight at the camera</b><span id="fs-count">0 / 20</span></div>
+    <button class="pill-btn ghost" id="fs-cancel" type="button">Cancel</button>
+  </div>
+
+  <div class="flash-title" id="flash-title" aria-hidden="true"></div>
+  <div class="hint" id="hint" role="status" aria-live="polite"></div>
+  <div class="fps" id="fps" hidden>-- fps</div>
+  <div class="motion-badge" id="motion-badge" hidden></div>
+  <div class="hand-cursor" id="hand-cursor" aria-hidden="true"><i></i><b></b></div>
+
+  <section class="sign-panel" id="sign-panel" hidden aria-label="Sign reader"></section>
+  <aside class="health-panel" id="health" hidden aria-label="Health"></aside>
+
+  <div class="game-hud" id="game-hud" hidden>
+    <div class="hud-block"><span class="hud-label">Score</span><span class="hud-value" id="hud-score">0</span></div>
+    <div class="hud-block" id="hud-time-block"><span class="hud-label">Time</span><span class="hud-value" id="hud-time">0</span></div>
+    <div class="hud-block" id="hud-lives-block"><span class="hud-label">Lives</span><span class="hud-value lives" id="hud-lives"></span></div>
+  </div>
+
+  <section class="game-card" id="game-panel" hidden aria-label="Game">
+    <div class="game-kicker" id="gp-kicker">Game</div>
+    <h2 id="gp-title"></h2>
+    <p class="game-sub" id="gp-sub"></p>
+    <ul class="game-rules" id="gp-rules"></ul>
+    <div class="game-best" id="gp-best"></div>
+    <div class="card-actions">
+      <button class="btn primary" id="gp-start">Start</button>
+      <button class="btn ghost" id="gp-exit">Close</button>
+    </div>
+    <div class="game-tip">Press <kbd>Space</kbd> or show a 👍 to start</div>
+  </section>
+
+  <nav class="dock ui-layer" id="dock" aria-label="Modes and effects">
+    <div class="extras" id="extras"></div>
+    <div class="carousel-wrap">
+      <div class="carousel" id="carousel" role="listbox"></div>
+      <div class="shutter-ring" aria-hidden="true"></div>
+    </div>
+    <div class="item-name"><span id="item-name">Original</span><em id="item-action"></em></div>
+  </nav>
+
+  <aside class="chat" id="chat" hidden aria-label="Syrix">
+    <header class="chat-head">
+      <span class="chat-logo"><img src="assets/syrix-logo-256.png" alt=""></span>
+      <div class="chat-id"><div class="chat-title">Syrix</div><div class="chat-sub" id="chat-sub"></div></div>
+      <button class="icon-btn" id="chat-new" title="New chat"><svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="icon-btn" id="chat-close" title="Close"><svg viewBox="0 0 24 24" class="ico"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </header>
+    <div class="chat-log scroll-y" id="chat-log"></div>
+    <form class="chat-setup" id="chat-setup" hidden>
+      <span class="setup-mark"><img src="assets/syrix-logo-256.png" alt=""></span>
+      <h3>Pair with SYRIX</h3>
+      <p>Enter your SYRIX pairing code once to connect this PC. Syrix can then see what the camera sees, talk with you, and run the app for you.</p>
+      <input type="password" placeholder="Pairing code" autocomplete="off" spellcheck="false">
+      <button class="btn primary" type="submit">Pair this PC</button>
+      <small data-note></small>
+    </form>
+    <div class="chat-empty" id="chat-empty" hidden>
+      <span class="chat-empty-mark"><img src="assets/syrix-logo-256.png" alt=""></span>
+      <h3>What can I do for you?</h3>
+      <p>I see what your camera sees. I can build games and 3D scenes, draw, run the app, check your health and search the web.</p>
+      <div class="chat-suggest" id="chat-suggest"></div>
+    </div>
+    <form class="chat-compose" id="chat-form" hidden>
+      <button type="button" class="eye" id="chat-eye" aria-pressed="true">
+        <svg viewBox="0 0 24 24" class="ico on"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg viewBox="0 0 24 24" class="ico off"><path d="M17.94 17.94A10 10 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9 9 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/></svg>
+      </button>
+      <textarea id="chat-input" rows="1" placeholder="Ask or tell Syrix anything…"></textarea>
+      <button type="button" class="mic" id="chat-mic" title="Voice mode (V)">
+        <svg viewBox="0 0 24 24" class="ico"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <button type="submit" class="send" id="chat-send" title="Send (Enter)">
+        <svg viewBox="0 0 24 24" class="ico go"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        <svg viewBox="0 0 24 24" class="ico halt"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+      </button>
+    </form>
+    <p class="chat-note" id="chat-note">Syrix can make mistakes. Check anything important.</p>
+  </aside>
+
+  <section class="menu" id="menu" hidden aria-label="Search everything">
+    <div class="menu-card" role="dialog" aria-modal="true">
+      <div class="menu-search">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="menu-input" type="text" placeholder="Search effects, modes, widgets, settings… or ask Syrix" autocomplete="off" spellcheck="false">
+        <kbd>Esc</kbd>
+      </div>
+      <div class="menu-list scroll-y" id="menu-list" role="listbox"></div>
+      <div class="menu-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Tab</kbd> ask Syrix</span></div>
+    </div>
+  </section>
+
+  <section class="settings" id="settings" hidden></section>
+
+  <section class="cover" id="shutter-screen" hidden>
+    <div class="cover-inner">
+      <div class="cover-icon">
+        <svg viewBox="0 0 24 24" class="ico"><line x1="2" y1="2" x2="22" y2="22"/><path d="M7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16"/><path d="M9.5 4h5L17 7h3a2 2 0 0 1 2 2v7.5"/><path d="M14.12 15.12A3 3 0 1 1 9.88 10.88"/></svg>
+      </div>
+      <h2 id="cover-title">Camera is off</h2>
+      <p id="cover-text">The camera light is off and nothing is being captured.</p>
+      <button class="btn primary" id="cover-action">Turn camera on</button>
+    </div>
+  </section>
+
+  <section class="welcome" id="welcome" hidden>
+    <div class="welcome-card">
+      <img src="assets/logo-512.png" alt="">
+      <h1>Welcome to SYRIX&nbsp;Cam</h1>
+      <p class="welcome-sub">Effects, health, games and Syrix for your webcam. Private by design.</p>
+      <div class="welcome-grid">
+        <div><b>Swipe the carousel</b><span>Pick a mode below, then scroll or click through its effects.</span></div>
+        <div><b>Use your hands</b><span>Draw, cast magic, play or drive the app hands-free. Turn on effect gestures in Settings to flip looks with 👍.</span></div>
+        <div><b>Talk to Syrix</b><span>Press V and just talk. Syrix sees the camera, knows the app and can change anything for you.</span></div>
+        <div><b>Stays on your PC</b><span>Video never leaves this PC and nothing is recorded. Only your words to Syrix are sent.</span></div>
+      </div>
+      <button class="btn primary" id="welcome-go">Let’s go</button>
+    </div>
+  </section>
+
+  <section class="intro" id="intro" aria-label="Starting SYRIX Cam">
+    <div class="intro-logo">
+      <svg viewBox="0 0 512 512" class="intro-svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="ig-blade" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#3a3a3e"/><stop offset=".55" stop-color="#1b1b1e"/><stop offset="1" stop-color="#0d0d0f"/>
+          </linearGradient>
+          <linearGradient id="ig-rim" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#ff8a00" stop-opacity="0"/><stop offset=".45" stop-color="#ffb347"/><stop offset="1" stop-color="#ff7a00"/>
+          </linearGradient>
+          <radialGradient id="ig-lens" cx="42%" cy="38%" r="70%">
+            <stop offset="0" stop-color="#2b2b30"/><stop offset=".55" stop-color="#0b0b0d"/><stop offset="1" stop-color="#000"/>
+          </radialGradient>
+          <radialGradient id="ig-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#ff9a1f" stop-opacity=".55"/><stop offset="1" stop-color="#ff9a1f" stop-opacity="0"/>
+          </radialGradient>
+          <filter id="ig-blur"><feGaussianBlur stdDeviation="6"/></filter>
+        </defs>
+        <rect class="i-tile" x="16" y="16" width="480" height="480" rx="112"/>
+        <g class="i-blade a">
+          <path class="i-blade-fill" d="M92 318C52 252 64 166 132 112L170 82C190 66 214 58 246 56L398 46L306 122L232 126C204 128 180 140 164 160L120 214C104 236 98 270 106 304Z"/>
+          <path class="i-rim" pathLength="1" d="M398 46L306 122L232 126C204 128 180 140 164 160L120 214C104 236 98 270 106 304"/>
+        </g>
+        <g class="i-blade b" transform="rotate(180 256 262)">
+          <path class="i-blade-fill" d="M92 318C52 252 64 166 132 112L170 82C190 66 214 58 246 56L398 46L306 122L232 126C204 128 180 140 164 160L120 214C104 236 98 270 106 304Z"/>
+          <path class="i-rim" pathLength="1" d="M398 46L306 122L232 126C204 128 180 140 164 160L120 214C104 236 98 270 106 304"/>
+        </g>
+        <g class="i-eye">
+          <circle class="i-glow" cx="256" cy="262" r="150" fill="url(#ig-glow)"/>
+          <circle class="i-lens" cx="256" cy="262" r="92" fill="url(#ig-lens)"/>
+          <circle class="i-ring" cx="256" cy="262" r="104" pathLength="1"/>
+          <circle class="i-iris" cx="256" cy="262" r="58"/>
+          <circle class="i-iris2" cx="256" cy="262" r="34"/>
+          <circle class="i-glint" cx="279" cy="237" r="8"/>
+          <ellipse class="i-shine" cx="226" cy="222" rx="34" ry="16" transform="rotate(-28 226 222)"/>
+        </g>
+        <circle class="i-rec" cx="428" cy="142" r="14"/>
+      </svg>
+    </div>
+    <div class="intro-text">
+      <div class="intro-name">SYRIX <span>CAM</span></div>
+      <div class="intro-bar"><i id="intro-fill"></i></div>
+      <div class="intro-status" id="intro-status">Starting up</div>
+    </div>
+    <div class="intro-credit">Made by <b>Kabirr Kohli</b> · Powered by <b>SYRIX</b></div>
+  </section>
+</body>
+</html>
