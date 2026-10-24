@@ -92,6 +92,10 @@ powershell -ExecutionPolicy Bypass -File build\install.ps1   # installs per-user
 
 Start the app with `--remote-debugging-port=<port>` to attach a debugger during development.
 
+## Development history
+
+Developed in a private repository — 15 commits, October 2026 — and published here as a curated snapshot. The working history stays private because it contains local configuration from development.
+
 ---
 
 © 2026 Kabirr Kohli. All rights reserved. Published for viewing; no licence is granted to copy, modify or redistribute. Third-party components are listed in `THIRD_PARTY_NOTICES.txt` under their own licences.
